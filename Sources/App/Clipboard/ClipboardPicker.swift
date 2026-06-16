@@ -60,8 +60,15 @@ private struct VisualEffectBlur: NSViewRepresentable {
 /// the SwiftUI list.
 @MainActor
 final class ClipboardPickerModel: ObservableObject {
-    @Published var items: [ClipItem] = []
+    @Published var items: [ClipItem] = []   // full history
+    @Published var query: String = ""
     @Published var selection: Int = 0
+
+    /// Items after applying the search query (selection indexes into this).
+    var filtered: [ClipItem] {
+        guard !query.isEmpty else { return items }
+        return items.filter { $0.text.localizedCaseInsensitiveContains(query) }
+    }
 }
 
 @MainActor
@@ -84,6 +91,7 @@ final class ClipboardPicker {
         previousApp = NSWorkspace.shared.frontmostApplication
 
         model.items = manager.items
+        model.query = ""
         model.selection = 0
 
         let root = ClipboardPickerView(
@@ -94,8 +102,8 @@ final class ClipboardPicker {
                 guard let self else { return }
                 self.manager?.remove(item)
                 self.model.items = self.manager?.items ?? []
-                if self.model.selection >= self.model.items.count {
-                    self.model.selection = max(0, self.model.items.count - 1)
+                if self.model.selection >= self.model.filtered.count {
+                    self.model.selection = max(0, self.model.filtered.count - 1)
                 }
             },
             onClear: { [weak self] in
@@ -151,9 +159,12 @@ final class ClipboardPicker {
     }
 
     private func installKeyMonitor() {
+        // Navigation keys are intercepted here BEFORE they reach the search
+        // field; everything else falls through so typing filters the list.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, self.isOpen else { return event }
-            let count = self.model.items.count
+            let list = self.model.filtered
+            let count = list.count
             switch event.keyCode {
             case 125: // down
                 if count > 0 { self.model.selection = min(count - 1, self.model.selection + 1) }
@@ -162,16 +173,22 @@ final class ClipboardPicker {
                 if count > 0 { self.model.selection = max(0, self.model.selection - 1) }
                 return nil
             case 48, 36, 76: // tab (primary) / return / enter → paste
-                if self.model.items.indices.contains(self.model.selection) {
-                    self.pick(self.model.items[self.model.selection])
+                if list.indices.contains(self.model.selection) {
+                    self.pick(list[self.model.selection])
                 }
                 return nil
-            case 53: // escape
-                self.close()
+            case 53: // escape: clear the search first, then close
+                if !self.model.query.isEmpty {
+                    self.model.query = ""
+                    self.model.selection = 0
+                } else {
+                    self.close()
+                }
                 return nil
-            case 18...23, 25, 26, 28, 29: // number row 1-9 → quick pick
-                if let n = Int(event.charactersIgnoringModifiers ?? ""), n >= 1, n <= count {
-                    self.pick(self.model.items[n - 1])
+            case 18...23, 25, 26, 28, 29: // number row 1-9 → quick pick (only when not searching)
+                if self.model.query.isEmpty,
+                   let n = Int(event.charactersIgnoringModifiers ?? ""), n >= 1, n <= count {
+                    self.pick(list[n - 1])
                     return nil
                 }
                 return event
@@ -189,6 +206,7 @@ private struct ClipboardPickerView: View {
     let onRemove: (ClipItem) -> Void
     let onClear: () -> Void
     let onClose: () -> Void
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -226,48 +244,27 @@ private struct ClipboardPickerView: View {
 
             Divider()
 
-            if model.items.isEmpty {
-                Spacer()
-                VStack(spacing: 10) {
-                    Image(systemName: "clipboard")
-                        .font(.system(size: 40, weight: .light))
-                        .foregroundStyle(.tertiary)
-                    Text("Chưa có gì trong Clipboard")
-                        .font(.title3)
+            if !model.items.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
-                    Text("Sao chép văn bản hoặc hình ảnh để bắt đầu lưu lịch sử.")
-                        .font(.callout)
-                        .foregroundStyle(.tertiary)
-                        .multilineTextAlignment(.center)
+                    TextField("Tìm trong lịch sử…", text: $model.query)
+                        .textFieldStyle(.plain)
+                        .focused($searchFocused)
+                        .onChange(of: model.query) { _, _ in model.selection = 0 }
                 }
-                .padding(.horizontal, 30)
-                Spacer()
-            } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 2) {
-                            ForEach(Array(model.items.enumerated()), id: \.element.id) { index, item in
-                                PickerRow(index: index, item: item,
-                                          isSelected: index == model.selection,
-                                          imageURL: imageURL,
-                                          onPick: { onPick(item) },
-                                          onRemove: { onRemove(item) })
-                                    .id(index)
-                            }
-                        }
-                        .padding(8)
-                    }
-                    .onChange(of: model.selection) { _, newValue in
-                        withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(newValue, anchor: .center) }
-                    }
-                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                Divider()
             }
+
+            listContent
 
             Divider()
             HStack(spacing: 14) {
                 hint("↑↓", "Chọn")
                 hint("⇥", "Dán")
-                hint("1–9", "Chọn nhanh")
+                if model.query.isEmpty { hint("1–9", "Chọn nhanh") }
                 hint("esc", "Đóng")
             }
             .padding(.horizontal, 14)
@@ -280,6 +277,59 @@ private struct ClipboardPickerView: View {
         .background(VisualEffectBlur(material: .popover))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator, lineWidth: 0.5))
+        .onAppear { searchFocused = true }
+    }
+
+    @ViewBuilder
+    private var listContent: some View {
+        let items = model.filtered
+        if model.items.isEmpty {
+            emptyState(icon: "clipboard",
+                       title: "Chưa có gì trong Clipboard",
+                       subtitle: "Sao chép văn bản hoặc hình ảnh để bắt đầu lưu lịch sử.")
+        } else if items.isEmpty {
+            emptyState(icon: "magnifyingglass",
+                       title: "Không tìm thấy",
+                       subtitle: "Không có mục nào khớp với “\(model.query)”.")
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            PickerRow(index: index, item: item,
+                                      isSelected: index == model.selection,
+                                      imageURL: imageURL,
+                                      onPick: { onPick(item) },
+                                      onRemove: { onRemove(item) })
+                                .id(index)
+                        }
+                    }
+                    .padding(8)
+                }
+                .onChange(of: model.selection) { _, newValue in
+                    withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(newValue, anchor: .center) }
+                }
+            }
+        }
+    }
+
+    private func emptyState(icon: String, title: String, subtitle: String) -> some View {
+        VStack(spacing: 10) {
+            Spacer()
+            Image(systemName: icon)
+                .font(.system(size: 40, weight: .light))
+                .foregroundStyle(.tertiary)
+            Text(title)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+            Text(subtitle)
+                .font(.callout)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 30)
     }
 
     private func hint(_ key: String, _ label: String) -> some View {
