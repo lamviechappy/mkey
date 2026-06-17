@@ -14,6 +14,15 @@ struct ClipboardPage: View {
         Form {
             Section {
                 Toggle("Bật lịch sử Clipboard", isOn: $manager.enabled)
+                if manager.enabled {
+                    Toggle("Ghim trên cùng", isOn: $manager.pinOnTop)
+                    Toggle("Tự động ẩn", isOn: $manager.autoHide)
+                    
+                    Button("Đặt lại kích thước và vị trí cửa sổ") {
+                        manager.resetPickerLayout()
+                    }
+                    .buttonStyle(.borderless)
+                }
             }
 
             if manager.enabled {
