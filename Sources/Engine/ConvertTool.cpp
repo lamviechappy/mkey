@@ -23,18 +23,36 @@ Uint8 convertToolFromCode = 0;
 Uint8 convertToolToCode = 0;
 int convertToolHotKey = 0;
 
+#include <unordered_map>
+#include <utility>
+
 static vector<Uint8> _breakCode = {'.', '?', '!'};
 
-static bool findKeyCode(const Uint32& charCode, const Uint8& code, int& j, int& k) {
-    //find character which has tone/mark
-    for (map<Uint32, vector<Uint16>>::iterator it = _codeTable[code].begin(); it != _codeTable[code].end(); ++it) {
-        for (int z = 0; z < it->second.size(); z++) {
-            if (charCode == it->second[z]) {
-                j = it->first;
-                k = z;
-                return true;
-            }//end if
+static unordered_map<Uint32, pair<int, int>> _reverseCodeTable[5];
+static bool _reverseCodeTableInitialized = false;
+
+static void initReverseCodeTables() {
+    if (_reverseCodeTableInitialized) return;
+    for (int code = 0; code < 5; code++) {
+        for (auto it = _codeTable[code].begin(); it != _codeTable[code].end(); ++it) {
+            for (size_t z = 0; z < it->second.size(); z++) {
+                _reverseCodeTable[code][it->second[z]] = make_pair((int)it->first, (int)z);
+            }
         }
+    }
+    _reverseCodeTableInitialized = true;
+}
+
+static bool findKeyCode(const Uint32& charCode, const Uint8& code, int& j, int& k) {
+    if (code >= 5) return false;
+    if (!_reverseCodeTableInitialized) {
+        initReverseCodeTables();
+    }
+    auto it = _reverseCodeTable[code].find(charCode);
+    if (it != _reverseCodeTable[code].end()) {
+        j = it->second.first;
+        k = it->second.second;
+        return true;
     }
     return false;
 }

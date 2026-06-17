@@ -555,21 +555,31 @@ map<Uint32, Uint32> _characterMap = {
     {' ', KEY_SPACE}
 };
 
-map<Uint32, Uint32> _keyCodeToChar;
+static Uint16 _keyCodeToCharTable[128][2] = {0};
+static bool _keyCodeToCharTableInitialized = false;
 
-void initKeyCodeToChar() {
-    _keyCodeToChar.clear();
-    for (std::map<Uint32, Uint32>::iterator it = _characterMap.begin(); it != _characterMap.end(); ++it) {
-        _keyCodeToChar[it->second] = it->first;
+void initKeyCodeToCharTable() {
+    if (_keyCodeToCharTableInitialized) return;
+    for (auto it = _characterMap.begin(); it != _characterMap.end(); ++it) {
+        Uint32 val = it->second;
+        unsigned int key = val & CHAR_MASK;
+        unsigned int caps = (val & CAPS_MASK) ? 1 : 0;
+        if (key < 128) {
+            _keyCodeToCharTable[key][caps] = it->first;
+        }
     }
+    _keyCodeToCharTableInitialized = true;
 }
 
 Uint16 keyCodeToCharacter(const Uint32& keyCode) {
-    if (_keyCodeToChar.size() == 0) { //init data if it is empty
-        initKeyCodeToChar();
+    if (!_keyCodeToCharTableInitialized) {
+        initKeyCodeToCharTable();
     }
-    if (_keyCodeToChar.find(keyCode) != _keyCodeToChar.end()) {
-        return _keyCodeToChar[keyCode];
+    unsigned int key = keyCode & CHAR_MASK;
+    unsigned int caps = (keyCode & CAPS_MASK) ? 1 : 0;
+    if (key < 128) {
+        Uint16 ch = _keyCodeToCharTable[key][caps];
+        if (ch != 0) return ch;
     }
     return 0;
 }

@@ -17,11 +17,15 @@ struct ClipboardPage: View {
                 if manager.enabled {
                     Toggle("Ghim trên cùng", isOn: $manager.pinOnTop)
                     Toggle("Tự động ẩn", isOn: $manager.autoHide)
-                    
-                    Button("Đặt lại kích thước và vị trí cửa sổ") {
-                        manager.resetPickerLayout()
+                    HStack {
+                        Text("Kích thước và vị trí cửa sổ")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Đặt lại") {
+                            manager.resetPickerLayout()
+                        }
+                        .disabled(!manager.hasCustomLayout)
                     }
-                    .buttonStyle(.borderless)
                 }
             }
 

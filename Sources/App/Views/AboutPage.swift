@@ -40,21 +40,24 @@ struct AboutPage: View {
             }
             .padding(.top, 12)
 
-            HStack(spacing: 12) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 FeatureCard(icon: "magnifyingglass",
                             title: "Mượt trong Spotlight",
-                            caption: "Sửa chữ qua Accessibility API — gõ nhanh không nhảy chữ")
-                FeatureCard(icon: "bolt.fill",
-                            title: "Gõ tắt & chuyển mã",
-                            caption: "Macro thông minh, 5 bảng mã, chuyển mã clipboard tức thì")
+                            caption: "Sửa chữ qua Accessibility API giúp gõ nhanh không bị nhảy chữ")
+                FeatureCard(icon: "doc.on.clipboard",
+                            title: "Lịch sử Clipboard",
+                            caption: "Panel nổi tuỳ chỉnh kích thước, tìm kiếm, lưu text & hình ảnh")
                 FeatureCard(icon: "arrow.triangle.2.circlepath",
-                            title: "Chuyển thông minh",
-                            caption: "Tự nhớ Việt/Anh và bảng mã theo từng ứng dụng")
+                            title: "Chuyển chế độ thông minh",
+                            caption: "Tự động chuyển ngôn ngữ, bảng mã, gõ tắt theo từng ứng dụng")
+                FeatureCard(icon: "speedometer",
+                            title: "Hiệu năng O(1) siêu tốc",
+                            caption: "Bảng nhảy C++, bản đồ băm và LTO loại bỏ hoàn toàn độ trễ gõ")
             }
-            .padding(.top, 26)
+            .padding(.top, 16)
             .padding(.horizontal, 28)
 
-            Spacer(minLength: 20)
+            Spacer(minLength: 16)
 
             Text("Phát triển bởi **Anh Tuấn** · © 2026")
                 .font(.callout)
@@ -68,8 +71,8 @@ struct AboutPage: View {
             }
             .font(.footnote)
             .foregroundStyle(.tertiary)
-            .padding(.top, 10)
-            .padding(.bottom, 22)
+            .padding(.top, 8)
+            .padding(.bottom, 18)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -115,9 +118,9 @@ private struct FeatureCard: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, 14)
         .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14))
     }
 }

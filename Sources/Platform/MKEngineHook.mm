@@ -22,23 +22,6 @@
 #define EMPTY_HOTKEY 0xFE0000FE
 #define LOAD_DATA(VAR, KEY) VAR = (int)[[NSUserDefaults standardUserDefaults] integerForKey:@#KEY]
 
-// Ignore code for Modifier keys and numpad
-NSDictionary *keyStringToKeyCodeMap = @{
-    // Characters from number row
-    @"`": @50, @"~": @50, @"1": @18, @"!": @18, @"2": @19, @"@": @19, @"3": @20, @"#": @20, @"4": @21, @"$": @21,
-    @"5": @23, @"%": @23, @"6": @22, @"^": @22, @"7": @26, @"&": @26, @"8": @28, @"*": @28, @"9": @25, @"(": @25,
-    @"0": @29, @")": @29, @"-": @27, @"_": @27, @"=": @24, @"+": @24,
-    // Characters from first keyboard row
-    @"q": @12, @"w": @13, @"e": @14, @"r": @15, @"t": @17, @"y": @16, @"u": @32, @"i": @34, @"o": @31, @"p": @35,
-    @"[": @33, @"{": @33, @"]": @30, @"}": @30, @"\\": @42, @"|": @42,
-    // Characters from second keyboard row
-    @"a": @0, @"s": @1, @"d": @2, @"f": @3, @"g": @5, @"h": @4, @"j": @38, @"k": @40, @"l": @37,
-    @";": @41, @":": @41, @"'": @39, @"\"": @39,
-    // Characters from third keyboard row
-    @"z": @6, @"x": @7, @"c": @8, @"v": @9, @"b": @11, @"n": @45, @"m": @46,
-    @",": @43, @"<": @43, @".": @47, @">": @47, @"/": @44, @"?": @44
-};
-
 extern "C" void MKReEnableEventTap(void); //implemented in MKBridge.mm
 
 //set by MKBridge while MKey's own text UI (clipboard search) needs raw keys
@@ -411,6 +394,7 @@ extern "C" {
     }
 
     void OnActiveAppChanged() { //use for smart switch key
+        AXInvalidateFocusCache();
         MKUpdateInputSourceCache();
         queryFrontMostApp();
         _languageTemp = getAppInputMethodStatus(string(_frontMostApp.UTF8String), vLanguage | (vCodeTable << 1));
@@ -759,17 +743,59 @@ extern "C" {
     }
 
     int ConvertKeyStringToKeyCode(NSString *keyString, CGKeyCode fallback) {
-        // Information about capitalization (shift/caps) is already included
-        // in the original CGEvent, only find out which position on keyboard a key is pressed
-        NSString *lowercasedKeyString = [keyString lowercaseString];
-        if (!lowercasedKeyString) {
-            return fallback;
-        }
-
-        NSNumber *keycode = [keyStringToKeyCodeMap objectForKey:lowercasedKeyString];
-
-        if (keycode) {
-            return [keycode intValue];
+        if (keyString == nil || [keyString length] == 0) return fallback;
+        unichar ch = [keyString characterAtIndex:0];
+        if (ch < 128) {
+            switch (ch) {
+                case 'a': case 'A': return 0;
+                case 'b': case 'B': return 11;
+                case 'c': case 'C': return 8;
+                case 'd': case 'D': return 2;
+                case 'e': case 'E': return 14;
+                case 'f': case 'F': return 3;
+                case 'g': case 'G': return 5;
+                case 'h': case 'H': return 4;
+                case 'i': case 'I': return 34;
+                case 'j': case 'J': return 38;
+                case 'k': case 'K': return 40;
+                case 'l': case 'L': return 37;
+                case 'm': case 'M': return 46;
+                case 'n': case 'N': return 45;
+                case 'o': case 'O': return 31;
+                case 'p': case 'P': return 35;
+                case 'q': case 'Q': return 12;
+                case 'r': case 'R': return 15;
+                case 's': case 'S': return 1;
+                case 't': case 'T': return 17;
+                case 'u': case 'U': return 32;
+                case 'v': case 'V': return 9;
+                case 'w': case 'W': return 13;
+                case 'x': case 'X': return 7;
+                case 'y': case 'Y': return 16;
+                case 'z': case 'Z': return 6;
+                case '1': case '!': return 18;
+                case '2': case '@': return 19;
+                case '3': case '#': return 20;
+                case '4': case '$': return 21;
+                case '5': case '%': return 23;
+                case '6': case '^': return 22;
+                case '7': case '&': return 26;
+                case '8': case '*': return 28;
+                case '9': case '(': return 25;
+                case '0': case ')': return 29;
+                case '`': case '~': return 50;
+                case '-': case '_': return 27;
+                case '=': case '+': return 24;
+                case '[': case '{': return 33;
+                case ']': case '}': return 30;
+                case '\\': case '|': return 42;
+                case ';': case ':': return 41;
+                case '\'': case '"': return 39;
+                case ',': case '<': return 43;
+                case '.': case '>': return 47;
+                case '/': case '?': return 44;
+                default: return fallback;
+            }
         }
         return fallback;
     }
@@ -807,6 +833,11 @@ extern "C" {
 
         _flag = CGEventGetFlags(event);
         _keycode = (CGKeyCode)CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode);
+
+        CFAbsoluteTime currentKeystrokeTime = 0;
+        if (type == kCGEventKeyDown) {
+            currentKeystrokeTime = CFAbsoluteTimeGetCurrent();
+        }
 
         if (type == kCGEventKeyDown && vPerformLayoutCompat) {
             // If conversion fail, use current keycode
@@ -879,8 +910,12 @@ extern "C" {
 
                 if (pData->code == vReplaceMaro) { //handle macro in english mode
                     handleMacro();
+                    _lastKeystrokeTime = currentKeystrokeTime;
                     return NULL;
                 }
+            }
+            if (type == kCGEventKeyDown) {
+                _lastKeystrokeTime = currentKeystrokeTime;
             }
             return event;
         }
@@ -894,13 +929,15 @@ extern "C" {
         //if "turn off Vietnamese when in other language" mode on
         if(vOtherLanguage){
             if (!_cachedIsEnglishLayout) {
+                if (type == kCGEventKeyDown) {
+                    _lastKeystrokeTime = currentKeystrokeTime;
+                }
                 return event;
             }
         }
 
         //handle keyboard
         if (type == kCGEventKeyDown) {
-            _lastKeystrokeTime = CFAbsoluteTimeGetCurrent();
             //send event signal to Engine
             vKeyHandleEvent(vKeyEvent::Keyboard,
                             vKeyEventState::KeyDown,
@@ -925,6 +962,7 @@ extern "C" {
                         InsertKeyLength(1);
                     }
                 }
+                _lastKeystrokeTime = currentKeystrokeTime;
                 return event;
             } else if (pData->code == vWillProcess || pData->code == vRestore || pData->code == vRestoreAndStartNewSession) { //handle result signal
 
@@ -932,6 +970,7 @@ extern "C" {
                 //beats any event-timing game (no backspace can be swallowed
                 //by the async inline completion). Falls through on failure.
                 if (AXSlowPathActive() && TryAXProcessKey()) {
+                    _lastKeystrokeTime = currentKeystrokeTime;
                     return NULL;
                 }
 
@@ -977,6 +1016,7 @@ extern "C" {
                 handleMacro();
             }
 
+            _lastKeystrokeTime = currentKeystrokeTime;
             return NULL;
         }
 
