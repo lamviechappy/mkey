@@ -54,8 +54,7 @@ struct MenuContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Toggle("Tiếng Việt", isOn: $state.isVietnamese)
-            .menuShortcut(for: state.switchKeyStatus)
+        Toggle("Tiếng Việt  \(AppState.hotkeyDescription(state.switchKeyStatus))", isOn: $state.isVietnamese)
 
         Divider()
 
@@ -73,19 +72,17 @@ struct MenuContent: View {
 
         Divider()
 
-        Button("Chuyển mã nhanh") {
+        Button("Chuyển mã nhanh  \(AppState.hotkeyDescription(state.convertHotKey))") {
             MKBridge.engineRequestsQuickConvert()
         }
-        .menuShortcut(for: state.convertHotKey)
 
         Button("Công cụ chuyển mã…") { open(.convert) }
         Button("Gõ tắt…") { open(.macro) }
 
         if clipboard.enabled {
-            Button("Lịch sử Clipboard") {
+            Button("Lịch sử Clipboard  \(AppState.hotkeyDescription(clipboard.hotKey))") {
                 ClipboardManager.shared.togglePicker()
             }
-            .menuShortcut(for: clipboard.hotKey)
         }
 
         Divider()
@@ -240,15 +237,4 @@ final class MkeyAppDelegate: NSObject, NSApplicationDelegate {
 extension Notification.Name {
     static let mkOpenSettingsWindow = Notification.Name("MKOpenSettingsWindow")
     static let mkRequestAccessibility = Notification.Name("MKRequestAccessibility")
-}
-
-extension View {
-    @ViewBuilder
-    func menuShortcut(for status: Int32) -> some View {
-        if let key = AppState.keyboardShortcutKey(status) {
-            self.keyboardShortcut(key, modifiers: AppState.keyboardShortcutModifiers(status))
-        } else {
-            self
-        }
-    }
 }
